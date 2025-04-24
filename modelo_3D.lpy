@@ -1,0 +1,330 @@
+# Código para ingresar red actualizada a un modelo 3D
+# Hecho por Mariana Yuste
+# 2025
+
+import numpy as np
+from copy import deepcopy
+from scipy.integrate import solve_ivp
+
+
+
+
+# ---------------------------------------------------------------------------- #
+#                                Modelo de EDOs                                #
+# ---------------------------------------------------------------------------- #
+# PARÁMETROS 
+# de la red Azpeitia et al., (2021):
+n=2
+deg = 0.1
+kSL = 6.
+kTL = 0.5
+kAL = 4.0
+kLL = 100
+kauxL = 1
+kLA = 1.0
+kTA = 1.0
+kFA = 50.0
+kSA = 15.0
+kAS = 4.
+kFS = 10.
+kSS = 20.
+kST = 1.
+kLT = 100.0
+kSAT = 1.
+kRT = 0.1
+kDimAP1SAS=0.1
+kDisAP1SAS=0.01
+bauxL = np.sqrt(0.2)
+
+# Definidos manualmente para la inclusión de FT:
+DimFF = 37
+DisFF = 37
+DimTF = 55
+DisTF = 0.0055
+kFAc = 1
+kTAc = 1
+kFLc = 0.1
+kTLc = 0.01
+
+
+def dX_dt_comp(t,y):
+    
+    '''Sistema de ecuaciones de SALT+FT'''
+
+    L,A,S,SA,T,aux,R,FD,CTF,CTF,FT=y
+
+    lfy_ODE  = (CTF/(kFLc*(1+(CTF/kTLc))+CTF))*(((aux+bauxL)/(aux+bauxL+kauxL))*(kLL**n/(L**n+kLL**n))*(S**n/(S**n+kSL**n))+(A**n/(A**n+kAL**n)))-deg*L
+    ap1_ODE  = (CTF/(kFAc*(1+(CTF/kTAc))+CTF))*((L**n/(L**n+kLA**n))+(S**n/(S**n+kSA**n)))+((-kDimAP1SAS*A*S)+(kDisAP1SAS*SA))-deg*A
+    sas_ODE  = (kAS**n/(A**n+kAS**n))*((CTF/(CTF+kFS))+(S**n/(S**n+kSS**n)))+((-kDimAP1SAS*A*S)+(kDisAP1SAS*SA))-deg*S
+    tfl1_ODE  = ((S**n/(S**n+kST**n))*((kRT/(kRT+R))*(kSAT**n/(SA**n+kSAT**n))))+(L**n/(L**n+kLT**n))+((-DimTF*T*FD)+(DisTF*CTF))-deg*T
+    fd_ODE = (-DimTF*T*FD)+(DisTF*CTF)+(DisFF*CTF)-(DimFF*FT*FD)+(deg*CTF)
+    Ctf_ODE = (DimTF*T*FD)-(DisTF*CTF)-(deg*CTF)
+    Cff_ODE = (DimFF*FT*FD)-(DisFF*CTF)
+    return np.array([lfy_ODE,
+            ap1_ODE,
+            sas_ODE,
+            ((kDimAP1SAS*A*S)-(kDisAP1SAS*SA))-deg*SA, # SA
+            tfl1_ODE,
+            -deg*aux,
+            -deg*R,
+            fd_ODE,
+            Ctf_ODE,
+            Cff_ODE,
+            (DisFF*CTF)-(DimFF*FT*FD) # FT
+            ])
+
+def sim_comp(X0):
+    
+    '''Devuelve puntos finales del sistema de ecuaciones de SALT+FT'''
+
+    t = [0,200]
+    X = solve_ivp(dX_dt_comp,t,X0,method='LSODA')
+    final_points = np.zeros(11)
+    gene_counter = 0
+    for i in X.y:
+        final_points[gene_counter] = i[-1]
+        gene_counter += 1
+    return final_points
+
+
+
+
+# ---------------------------------------------------------------------------- #
+#                        Parámetros, clases y funciones                        #
+# ---------------------------------------------------------------------------- #
+
+# Parámetros de tiempo:
+steps = 140 # cuántos pasos de tiempo se asimilan las reglas de producción (número total de pasos en la simulación)
+step_number = 0 # paso de tiempo actual
+Dt = 0.1 # tamaño del paso de tiempo
+
+def getTime(): 
+  return step_number*Dt
+
+Plastochron = 1 # tiempo entre cada producción en un meristemo
+
+# Umbrales para definir estado del meristemo:
+A_threshold = 5
+L_threshold = 5
+T_threshold = 6.
+
+# Parámetros geométricos:
+BAng = 40 # Ángulo de ramificación
+Phi = 137.5 # Ángulo de rotación
+Width = 0.1
+
+
+def hillcurve(t):
+   '''
+   genera una curva sigmoidal para FT
+   '''
+   n = 7
+   k = 8
+   max = 10
+   return max * ((t**n)/(k**n + t**n))
+
+
+def meristem_state(L,A,T):
+    '''
+    Definir estado del meristemo
+    L,A,T,S son los puntos de eq de LFY, AP1 y TFL1 (en forma de CTF)
+    '''
+    FLOWER_COND = L > L_threshold and A > A_threshold
+    
+    if FLOWER_COND:
+        return 'F'
+    elif T > T_threshold:
+        return 'I'
+    else:
+        return 'V'
+
+
+class MeristemData:
+    '''
+    age: edad del meristemo
+    time_since_prod: tiempo desde la última producción de un órgano
+    order: orden del meristemo
+    state: estado del meristemo
+    X0: puntos de equilibrio de la red SALT+FT
+    '''
+    def __init__(self, parent_meristem = None):
+        self.age = 0 ¿
+        self.time_since_prod = 0 
+        if parent_meristem == None: # Si es el meristemo inicial 
+            self.order = 0 
+            self.state = 'V' # Vegetativo
+            self.X0 = np.zeros(11)
+            self.X0[0] = 0 #LFY inicial
+            self.X0[7] = 10 #FD_libre (y total) inicial
+        else: # Si es un meristemo nuevo
+            p = deepcopy(parent_meristem)
+            self.order = p.order + 1
+            self.state = p.state # hereda el estado del meristemo parental
+            self.X0 = p.X0
+            self.X0[4] = self.X0[4] * 0.1 # TFL1 se hereda en un 10%
+            self.X0[5] = 10 # Aux: valor máximo al inicio de un nuevo meristemo
+            self.X0[6] = 10 # eRep: valor máximo al inicio de un nuevo meristemo
+            self.X0[7] = self.X0[7]+self.X0[8]+self.X0[9] # FD libre
+            self.X0[8] = 0 # CTF
+            self.X0[9] = 0 # CFF
+            self.X0[10] = hillcurve(getTime()) # FT libre: el FT global
+
+
+class OrganData:
+    '''para geometría de I y L'''
+    def __init__(self,parent_meristem):
+        p = deepcopy(parent_meristem)
+        self.order = p.order
+
+
+def update_state(s):
+    '''
+    Actualizar la red SALT+FT. 
+    Definir el estado del meristemo, dependiendo los puntos de equilibrio obtenidos
+    '''
+    past_genes = deepcopy(s.X0)
+    # Definir el FT basado en el valor global de FT y el total CFF en el meristemo:
+    free_FT = hillcurve(getTime()) - past_genes[9]
+    past_genes[10] = free_FT
+    genes = sim_comp(past_genes)
+    LFY,AP1,SAX,DSA,TFL1,aux,eRep,FD,CTF,CFF,FT = genes
+    # guardar las nuevas expresiones de los genes 
+    s.X0 = genes
+    # Guardar el nuevo estado del meristemo
+    s.state = meristem_state(LFY,AP1,CTF)
+
+def Start():  
+    global step_number
+    step_number = 0
+
+
+def EndEach():
+    global step_number
+    step_number += 1
+    print(getTime(),hillcurve(getTime()))
+
+
+
+
+# ---------------------------------------------------------------------------- #
+#                                     AXIOM                                    #
+# ---------------------------------------------------------------------------- #
+module Flower # para permitir "Flower" como el nombre de una "letra"
+
+Axiom: IM(MeristemData())
+
+
+
+
+# ---------------------------------------------------------------------------- #
+#                                  PRODUCTION                                  #
+# ---------------------------------------------------------------------------- #
+derivation length: steps
+production:
+
+M(s): # MERISTEMO
+    update_state(s) # actualizar las expresiones de SALT+FT y el estado del meristemo M
+
+    if s.state == 'F':
+        produce Flower
+    else: 
+        s.age += Dt
+        s.time_since_prod += Dt
+        # ya no producir nada si el orden es mayor o igual a 2
+        if s.order >= 2:
+            produce
+        ### Si aún no hay producción (tanto para s = INF y VEG)
+        elif s.time_since_prod < Plastochron: 
+            produce M(s) # continuar con el mismo meristemo
+        ### Si ya es momento de producir un nuevo órgano:
+        else:
+            s.time_since_prod = 0
+            if s.state == 'I': # Para s = INF
+                n_s = MeristemData(parent_meristem = s)
+                produce I(OrganData(s))[+(BAng)M(n_s)]/(Phi)M(s)
+                        #internode, lateral meristem, rotation, meristem
+            if s.state == 'V': # Para s = VEG:
+                produce [+(BAng)L(OrganData(s))]/(Phi)M(s)
+
+L(s): # HOJA
+    produce L(s)
+
+I(s): # ENTRENUDO
+    produce I(s)
+
+Flower: # FLOR
+    produce Flower
+
+
+
+
+# ---------------------------------------------------------------------------- #
+#                                INTERPRETATION                                #
+# ---------------------------------------------------------------------------- #
+interpretation:
+
+M(s): # meristemo
+    if s.order >= 2:
+        produce
+    stalk_colour = 0
+    stalk_length = 1.2
+    if s.state == 'V':
+        colour = 0
+        stalk_length = 0.5
+    elif s.state == 'I':
+        colour = 1 #yellow
+    else:
+        colour = 5
+    # Produce una bolita con color verde si s=V, amarillo si s=I
+    produce _(Width);(stalk_colour)F(stalk_length);(colour)@O(0.4) 
+
+I(state): # entrenudo
+    length = 1.8 if state.order != 0 else 3 # longitud máxima, tallos más grandes en el eje principal
+    colour = 0
+    produce _(Width);(colour)F(length)
+
+L(state): # hoja
+    colour = 2
+    produce _(Width);(colour)[+(50)/(90)~l(3)]
+
+Flower:
+    stalk_colour = 0
+    flower_colour = 6
+    produce ;(stalk_colour)_(Width)F(1.7);(flower_colour)@O(0.4)
+
+endlsystem
+
+# ---------------------------------------------------------------------------- #
+#                                INITIALIZATION                                #
+# ---------------------------------------------------------------------------- #
+__lpy_code_version__ = 1.1
+
+def __initialiseContext__(context):
+    import openalea.plantgl.all as pgl
+    Color_0 = pgl.Material("Color_0" , ambient = (0,25,0) , diffuse = 5.4 , shininess = 0.54 , )
+    Color_0.name = "Color_0"
+    context.turtle.setMaterial(0,Color_0)
+    Color_1 = pgl.Material("Color_1" , ambient = (0,100,0) , diffuse = 0.76 , )
+    Color_1.name = "Color_1"
+    context.turtle.setMaterial(1,Color_1)
+    Color_2 = pgl.Material("Color_2" , ambient = (60,60,15) , diffuse = 3 , )
+    Color_2.name = "Color_2"
+    context.turtle.setMaterial(2,Color_2)
+    Color_3 = pgl.Material("Color_3" , ambient = (148,55,255) , diffuse = 0.705882 , )
+    Color_3.name = "Color_3"
+    context.turtle.setMaterial(3,Color_3)
+    Color_4 = pgl.Material("Color_4" , ambient = (0,100,250) , diffuse = 0.4 , )
+    Color_4.name = "Color_4"
+    context.turtle.setMaterial(4,Color_4)
+    Color_5 = pgl.Material("Color_5" , ambient = (255,149,0) , diffuse = 0.705882 , )
+    Color_5.name = "Color_5"
+    context.turtle.setMaterial(5,Color_5)
+###### INITIALISATION ######
+
+__lpy_code_version__ = 1.1
+
+def __initialiseContext__(context):
+	import openalea.plantgl.all as pgl
+	Color_0 = pgl.Material("Color_0" , ambient = (0,25,0) , diffuse = 5.4 , shininess = 0.54 , )
+	Color_0.name = "Color_0"
+	context.turtle.setMaterial(0,Color_0)
