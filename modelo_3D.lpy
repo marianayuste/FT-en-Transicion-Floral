@@ -86,27 +86,29 @@ def sim_comp(X0):
         gene_counter += 1
     return final_points
 
-
-
-
 # ---------------------------------------------------------------------------- #
 #                        Parámetros, clases y funciones                        #
 # ---------------------------------------------------------------------------- #
 
+''' 
+NOTA SOBRE EL TIEMPO EN EL MODELO
+El modelo se encuentra en unidades de Plastocrón (el cual vale 20.2 hrs)
+por lo tanto cada paso Dt = 0.1 significa que Dt vale 0.1 Plastocrón (2hrs aprox)
+'''
+
 # Parámetros de tiempo:
-steps = 140 # cuántos pasos de tiempo se asimilan las reglas de producción (número total de pasos en la simulación)
+Plastochron = 1 # tiempo entre cada producción en un meristemo
+steps = 140 # número total de pasos en la simulación (durante cuántos pasos se asimilan las reglas de producción)
 step_number = 0 # paso de tiempo actual
 Dt = 0.1 # tamaño del paso de tiempo
 
 def getTime(): 
   return step_number*Dt
 
-Plastochron = 1 # tiempo entre cada producción en un meristemo
-
 # Umbrales para definir estado del meristemo:
 A_threshold = 5
 L_threshold = 5
-T_threshold = 6.
+T_threshold = 6
 
 # Parámetros geométricos:
 BAng = 40 # Ángulo de ramificación
@@ -148,7 +150,7 @@ class MeristemData:
     X0: puntos de equilibrio de la red SALT+FT
     '''
     def __init__(self, parent_meristem = None):
-        self.age = 0 ¿
+        self.age = 0 
         self.time_since_prod = 0 
         if parent_meristem == None: # Si es el meristemo inicial 
             self.order = 0 
