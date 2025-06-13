@@ -270,17 +270,18 @@ Flower: # FLOR
 interpretation:
 
 M(s): # meristemo
+	max_stalk_length = 1.2	
 	if s.order >= 2:
 		produce
-	stalk_colour = 0
-	stalk_length = 1.2
 	if s.state == 'V':
 		colour = 0
-		stalk_length = 0.5
 	elif s.state == 'I':
 		colour = 1 #yellow
 	else:
 		colour = 5
+	#pedicelo:
+	stalk_colour = 0
+	stalk_length = hill_curve(s.age, max_stalk_length)
 	# Produce una bolita con color verde si s=V, amarillo si s=I
 	produce _(Width);(stalk_colour)F(stalk_length);(colour)@O(0.4) 
 
