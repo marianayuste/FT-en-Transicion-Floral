@@ -90,15 +90,13 @@ def sim_comp(X0):
 #                        Parámetros, clases y funciones                        #
 # ---------------------------------------------------------------------------- #
 
-''' 
-NOTA SOBRE EL TIEMPO EN EL MODELO
+# Parámetros de tiempo:
+''' NOTA SOBRE EL TIEMPO EN EL MODELO
 El modelo se encuentra en unidades de Plastocrón (el cual vale 20.2 hrs)
 por lo tanto cada paso Dt = 0.1 significa que Dt vale 0.1 Plastocrón (2hrs aprox)
 '''
-
-# Parámetros de tiempo:
 Plastochron = 1 # tiempo entre cada producción en un meristemo
-steps = 140 # número total de pasos en la simulación (durante cuántos pasos se asimilan las reglas de producción)
+steps = 160 # número total de pasos en la simulación (durante cuántos pasos se asimilan las reglas de producción)
 step_number = 0 # paso de tiempo actual
 Dt = 0.1 # tamaño del paso de tiempo
 
@@ -115,8 +113,7 @@ BAng = 40 # Ángulo de ramificación
 Phi = 137.5 # Ángulo de rotación
 Width = 0.1
 
-
-def hillcurve(t):
+def FT_growth(t):
 	'''
 	genera una curva sigmoidal para FT
 	'''
@@ -125,6 +122,13 @@ def hillcurve(t):
 	max = 10
 	return max * ((t**n)/(k**n + t**n))
 
+def hill_curve(t,max):
+	'''
+	genera una curva sigmoidal para crecimiento de órganos
+	'''
+	n = 2
+	k = 3 # que alcance la mitad del maximo en un Plastocrón
+	return max * ((t**n)/(k**n + t**n))
 
 def meristem_state(L,A,T):
 	'''
@@ -169,7 +173,7 @@ class MeristemData:
 			self.X0[7] = self.X0[7]+self.X0[8]+self.X0[9] # FD libre
 			self.X0[8] = 0 # CTF
 			self.X0[9] = 0 # CFF
-			self.X0[10] = hillcurve(getTime()) # FT libre: el FT global
+			self.X0[10] = FT_growth(getTime()) # FT libre: el FT global
 
 
 class OrganData:
@@ -177,6 +181,7 @@ class OrganData:
 	def __init__(self,parent_meristem):
 		p = deepcopy(parent_meristem)
 		self.order = p.order
+		self.age = 0
 
 
 def update_state(s):
@@ -186,7 +191,7 @@ def update_state(s):
 	'''
 	past_genes = deepcopy(s.X0)
 	# Definir el FT basado en el valor global de FT y el total CFF en el meristemo:
-	free_FT = hillcurve(getTime()) - past_genes[9]
+	free_FT = FT_growth(getTime()) - past_genes[9]
 	past_genes[10] = free_FT
 	genes = sim_comp(past_genes)
 	LFY,AP1,SAX,DSA,TFL1,aux,eRep,FD,CTF,CFF,FT = genes
@@ -203,7 +208,7 @@ def Start():
 def EndEach():
 	global step_number
 	step_number += 1
-	print(getTime(),hillcurve(getTime()))
+	print(getTime(),FT_growth(getTime()))
 
 
 
@@ -213,9 +218,7 @@ def EndEach():
 # ---------------------------------------------------------------------------- #
 module Flower # para permitir "Flower" como el nombre de una "letra"
 
-Axiom: IM(MeristemData())
-
-
+Axiom: M(MeristemData())
 
 
 # ---------------------------------------------------------------------------- #
@@ -246,12 +249,13 @@ M(s): # MERISTEMO
 				produce I(OrganData(s))[+(BAng)M(n_s)]/(Phi)M(s)
 						#internode, lateral meristem, rotation, meristem
 			if s.state == 'V': # Para s = VEG:
-				produce [+(BAng)L(OrganData(s))]/(Phi)M(s)
+				produce [+(BAng)L]/(Phi)M(s)
 
-L(s): # HOJA
-	produce L(s)
+L: # HOJA
+	produce L
 
 I(s): # ENTRENUDO
+	s.age += Dt
 	produce I(s)
 
 Flower: # FLOR
@@ -281,11 +285,12 @@ M(s): # meristemo
 	produce _(Width);(stalk_colour)F(stalk_length);(colour)@O(0.4) 
 
 I(state): # entrenudo
-	length = 1.8 if state.order != 0 else 3 # longitud máxima, tallos más grandes en el eje principal
+	max_length = 1.8 if state.order != 0 else 3 # longitud máxima, tallos más grandes en el eje principal
 	colour = 0
+	length = hill_curve(state.age, max_length)
 	produce _(Width);(colour)F(length)
 
-L(state): # hoja
+L: # hoja
 	colour = 2
 	produce _(Width);(colour)[+(50)/(90)~l(3)]
 
