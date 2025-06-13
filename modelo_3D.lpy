@@ -165,7 +165,8 @@ class MeristemData:
 		else: # Si es un meristemo nuevo
 			p = deepcopy(parent_meristem)
 			self.order = p.order + 1
-			self.state = p.state # hereda el estado del meristemo parental
+			# self.state = p.state # hereda el estado del meristemo parental
+			self.state = '0' #estado aún no identificado
 			self.X0 = p.X0
 			self.X0[4] = self.X0[4] * 0.1 # TFL1 se hereda en un 10%
 			self.X0[5] = 10 # Aux: valor máximo al inicio de un nuevo meristemo
@@ -279,12 +280,17 @@ M(s): # meristemo
 		colour = 1 #yellow
 	else:
 		colour = 5
+	
+	ball_size = 0.4
+	if s.state == '0': #si es un estado aún no identificado
+		ball_size = 0
+
 	#pedicelo:
 	max_stalk_length = 0.7
 	stalk_colour = 0
 	stalk_length = hill_curve(s.age, max_stalk_length)
 	# Produce una bolita con color verde si s=V, amarillo si s=I
-	produce _(Width);(stalk_colour)F(stalk_length);(colour)@O(0.4) 
+	produce _(Width);(stalk_colour)F(stalk_length);(colour)@O(ball_size) 
 
 I(state): # entrenudo
 	max_length = 1.8 if state.order != 0 else 3 # longitud máxima, tallos más grandes en el eje principal
