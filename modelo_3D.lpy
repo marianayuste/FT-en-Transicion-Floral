@@ -231,7 +231,7 @@ M(s): # MERISTEMO
 	update_state(s) # actualizar las expresiones de SALT+FT y el estado del meristemo M
 
 	if s.state == 'F':
-		produce Flower
+		produce Flower(OrganData(s))
 	else: 
 		s.age += Dt
 		s.time_since_prod += Dt
@@ -258,8 +258,9 @@ I(s): # ENTRENUDO
 	s.age += Dt
 	produce I(s)
 
-Flower: # FLOR
-	produce Flower
+Flower(s): # FLOR
+	s.age += Dt
+	produce Flower(s)
 
 
 
@@ -270,7 +271,6 @@ Flower: # FLOR
 interpretation:
 
 M(s): # meristemo
-	max_stalk_length = 1.2	
 	if s.order >= 2:
 		produce
 	if s.state == 'V':
@@ -280,6 +280,7 @@ M(s): # meristemo
 	else:
 		colour = 5
 	#pedicelo:
+	max_stalk_length = 0.7
 	stalk_colour = 0
 	stalk_length = hill_curve(s.age, max_stalk_length)
 	# Produce una bolita con color verde si s=V, amarillo si s=I
@@ -295,10 +296,12 @@ L: # hoja
 	colour = 2
 	produce _(Width);(colour)[+(50)/(90)~l(3)]
 
-Flower:
-	stalk_colour = 0
+Flower(state):
 	flower_colour = 6
-	produce ;(stalk_colour)_(Width)F(1.7);(flower_colour)@O(0.4)
+	stalk_colour = 0
+	max_stalk_length = 1.7
+	stalk_length = hill_curve(state.age, max_stalk_length)
+	produce ;(stalk_colour)_(Width)F(stalk_length);(flower_colour)@O(0.4)
 
 endlsystem
 
